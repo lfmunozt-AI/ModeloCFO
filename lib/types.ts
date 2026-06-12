@@ -28,3 +28,14 @@ export interface RagChunk {
   source: string;
   score: number;
 }
+
+/** Estado de la ingesta de un documento (AG02). */
+export type DocumentStatus = "processing" | "ready" | "error";
+
+/** Documento del usuario (fuente del RAG). Lo expone GET /api/documents. */
+export interface Document {
+  id: string;
+  name: string;
+  status: DocumentStatus;
+  created_at: string;
+}

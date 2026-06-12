@@ -132,21 +132,58 @@ export default function ChatWindow({
     });
   }
 
+  // "Escribiendo…": el stream está abierto pero el asistente aún no emitió token.
+  const last = messages[messages.length - 1];
+  const waitingFirstToken =
+    streaming && last?.role === "assistant" && last.content === "";
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {messages.length === 0 ? (
-          <p className="mt-10 text-center text-sm text-zinc-400">
-            Empieza la conversación escribiendo abajo.
-          </p>
+          <div className="mt-12 px-4 text-center text-sm text-zinc-400">
+            <p className="font-medium text-zinc-500 dark:text-zinc-400">
+              Empieza a chatear con el modelo CFO.
+            </p>
+            <p className="mt-1">
+              Sube un documento con el clip 📎 para darme contexto, o escribe tu
+              pregunta abajo.
+            </p>
+          </div>
         ) : (
-          messages.map((m, i) => (
-            <Message key={i} role={m.role} content={m.content} />
-          ))
+          messages.map((m, i) => {
+            // Mientras esperamos el primer token, mostramos el indicador en vez
+            // de la burbuja vacía del asistente.
+            if (
+              waitingFirstToken &&
+              i === messages.length - 1 &&
+              m.role === "assistant"
+            ) {
+              return <TypingIndicator key={i} />;
+            }
+            return <Message key={i} role={m.role} content={m.content} />;
+          })
         )}
         <div ref={bottomRef} />
       </div>
       <MessageInput onSend={handleSend} disabled={streaming} />
+    </div>
+  );
+}
+
+/** Burbuja con tres puntos animados mientras el asistente "escribe…". */
+function TypingIndicator() {
+  return (
+    <div className="flex justify-start">
+      <div
+        className="flex items-center gap-1 rounded-2xl bg-zinc-100 px-4 py-3 dark:bg-zinc-800/60"
+        role="status"
+        aria-label="El asistente está escribiendo"
+      >
+        <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.3s]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400 [animation-delay:-0.15s]" />
+        <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-400" />
+      </div>
     </div>
   );
 }

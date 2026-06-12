@@ -14,11 +14,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     setLoading(true);
     const supabase = createSupabaseBrowserClient();
 
@@ -35,7 +37,7 @@ export default function LoginPage() {
     }
 
     if (mode === "signup") {
-      setError("Cuenta creada, inicia sesión.");
+      setSuccess("Cuenta creada, inicia sesión.");
       setMode("signin");
       return;
     }
@@ -77,7 +79,8 @@ export default function LoginPage() {
           className="w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-zinc-500"
         />
 
-        {error && <p className="text-sm text-amber-400">{error}</p>}
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        {success && <p className="text-sm text-emerald-400">{success}</p>}
 
         <button
           type="submit"
@@ -96,6 +99,7 @@ export default function LoginPage() {
           onClick={() => {
             setMode(mode === "signin" ? "signup" : "signin");
             setError(null);
+            setSuccess(null);
           }}
           className="w-full text-center text-xs text-zinc-400 hover:text-zinc-200"
         >
