@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { retrieveContext, formatContext } from "@/lib/rag";
+import { retrieveContext, formatContext, ingestMemoryExchange } from "@/lib/rag";
 import { streamChat } from "@/lib/llm";
 import type { ChatMessage, Role } from "@/lib/types";
 
@@ -11,7 +11,12 @@ export const runtime = "edge";
 const SYSTEM_BASE = [
   "Eres ModeloCFO, un asistente financiero conversacional.",
   "Respondes en español, de forma clara, directa y honesta.",
-  "Si no tienes datos suficientes en el contexto, dilo en lugar de inventar.",
+  "Dispones de memoria del usuario: el sistema te inyecta contexto recuperado de",
+  "sus documentos y de conversaciones anteriores cuando es relevante a la pregunta.",
+  "Si el contexto contiene la respuesta, úsala con naturalidad. NUNCA digas que no",
+  "puedes recordar ni que no tienes acceso a conversaciones pasadas; si no hay",
+  "contexto relevante, di que aún no tienes ese dato y sugiere al usuario",
+  "mencionarlo de nuevo o subirlo como documento.",
 ].join(" ");
 
 const MAX_HISTORY = 10;
@@ -114,6 +119,10 @@ export async function POST(req: NextRequest) {
           role: "assistant",
           content: fullText,
         });
+        // Memoria conversacional (AG02): embebe el par Usuario/Asistente como
+        // recuerdo recuperable en hilos futuros. fire-and-forget — nunca lanza y
+        // los tokens ya se enviaron al usuario, así que no bloquea su stream.
+        await ingestMemoryExchange(supabase, user.id, threadId, message, fullText);
       }
     },
   });
