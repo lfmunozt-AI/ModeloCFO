@@ -3,16 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 import Message from "./Message";
 import MessageInput from "./MessageInput";
+import { THREADS_CHANGED_EVENT, NEW_CHAT_EVENT } from "@/lib/chat-events";
 import type { ChatMessage } from "@/lib/types";
 
 interface ChatWindowProps {
-  threadId: string;
+  /** null = chat nuevo aún sin hilo; el hilo se crea con el primer mensaje. */
+  threadId: string | null;
   initialMessages: ChatMessage[];
 }
 
 /**
  * Ventana de chat. Mantiene el estado de los mensajes, envía a /api/chat y
  * consume el stream SSE token a token actualizando la respuesta del asistente.
+ *
+ * Si arranca sin hilo (threadId null), el primer envío crea el hilo en el
+ * servidor; el id llega en la cabecera X-Thread-Id y lo "adoptamos" actualizando
+ * la URL con history.replaceState — sin navegación de Next, para no desmontar
+ * este componente ni cortar el stream en curso (lo que abortaría la respuesta
+ * del asistente antes de que el servidor la persista).
  */
 export default function ChatWindow({
   threadId,
@@ -20,11 +28,27 @@ export default function ChatWindow({
 }: ChatWindowProps) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [streaming, setStreaming] = useState(false);
+  // Hilo activo en esta sesión montada (puede pasar de null → id tras el 1er envío).
+  const threadIdRef = useRef<string | null>(threadId);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Solo la instancia de "chat nuevo" (sin hilo de partida) se reinicia cuando
+  // el usuario pulsa "Nuevo hilo" estando ya en /chat.
+  useEffect(() => {
+    if (threadId !== null) return;
+    function reset() {
+      threadIdRef.current = null;
+      setMessages([]);
+      setStreaming(false);
+      window.history.replaceState(null, "", "/chat");
+    }
+    window.addEventListener(NEW_CHAT_EVENT, reset);
+    return () => window.removeEventListener(NEW_CHAT_EVENT, reset);
+  }, [threadId]);
 
   async function handleSend(text: string) {
     setStreaming(true);
@@ -39,11 +63,20 @@ export default function ChatWindow({
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId, message: text }),
+        body: JSON.stringify({ threadId: threadIdRef.current, message: text }),
       });
 
       if (!res.ok || !res.body) {
         throw new Error((await res.text()) || "Error en la respuesta");
+      }
+
+      // Adopta el hilo recién creado: actualiza la URL sin recargar y avisa a
+      // la sidebar. El stream sigue vivo en este mismo componente montado.
+      const returnedId = res.headers.get("X-Thread-Id");
+      if (returnedId && !threadIdRef.current) {
+        threadIdRef.current = returnedId;
+        window.history.replaceState(null, "", `/chat/${returnedId}`);
+        window.dispatchEvent(new CustomEvent(THREADS_CHANGED_EVENT));
       }
 
       const reader = res.body.getReader();

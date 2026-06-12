@@ -45,3 +45,52 @@ Auditoría (Claude, 2026-06-12): arquitectura aprobada. 3 hallazgos corregidos:
 con reglas deny (guardrails del modo bypass); (3) `.gitignore` sin blindaje de
 datasets/pesos del modelo — añadidos *.jsonl, *.csv, *.gguf, *.safetensors,
 datasets/, models/, lora_*/. Seguridad de API y RLS: sin hallazgos.
+
+## Hotfix 1 — UX (2026-06-12)
+| Campo | Valor |
+|---|---|
+| Rama | agent/01-hotfix-ux (desde origin/main, post-merge del esqueleto) |
+| Worktree | wt-modelocfo-ag01-hotfix |
+| Alcance | 2 tareas puntuales de UX. No se tocó nada fuera de ellas. |
+
+### Tarea 1 — mensaje de registro
+`app/login/page.tsx`: el mensaje largo de cuenta creada se reemplaza por la
+línea exacta `"Cuenta creada, inicia sesión."` en el `setError` del branch signup.
+
+### Tarea 2 — chat activo sin crear hilo a mano
+El campo de mensaje está activo nada más entrar a `/chat`; el hilo se materializa
+solo con el primer mensaje (no más hilos vacíos titulados "Nuevo hilo").
+- `app/chat/page.tsx`: ahora renderiza `<ChatWindow threadId={null} />` (input
+  activo desde el inicio) en lugar del estado vacío.
+- `app/api/chat/route.ts`: `threadId` pasa a ser **opcional**. Si no llega, crea
+  el hilo del usuario con título derivado del primer mensaje (~6 palabras, máx 40
+  chars) y devuelve el id en la cabecera **`X-Thread-Id`** del stream SSE.
+- `components/ChatWindow.tsx`: al recibir `X-Thread-Id` en la primera respuesta,
+  adopta el hilo y sincroniza la URL a `/chat/<id>` **con `window.history.replaceState`**
+  (no `router.replace`) para no desmontar el componente ni cortar el stream en
+  curso — si se desmontase, la respuesta del asistente podría no llegar a
+  persistirse en el servidor (`onComplete`). Avisa a la sidebar por evento.
+- `components/Sidebar.tsx`: "Nuevo hilo" ahora solo navega a `/chat` (estado
+  limpio) y emite `NEW_CHAT_EVENT`; ya no hace POST a `/api/threads` (cero filas
+  vacías). Recarga la lista al recibir `THREADS_CHANGED_EVENT`.
+- `lib/chat-events.ts` (nuevo): nombres de eventos de ventana para desacoplar
+  ChatWindow ↔ Sidebar.
+
+### Decisión de diseño (desviación justificada del sugerido)
+Se usó `window.history.replaceState` en vez del `router.replace` sugerido en (c):
+`router.replace` a `/chat/[id]` es un cambio de ruta de Next que **desmonta** el
+subárbol de `/chat` y aborta el `fetch` en streaming, con riesgo de perder la
+respuesta del asistente (la persistencia ocurre en `onComplete`, al cerrar el
+stream). `replaceState` actualiza la URL sin navegación, manteniendo el stream
+vivo en el mismo componente.
+
+### Limitación menor conocida
+Tras adoptar el hilo vía `replaceState`, `useParams()` no se actualiza hasta una
+navegación real, por lo que el hilo recién creado aparece en la sidebar pero no
+queda resaltado como activo hasta navegar a él o recargar. Trade-off aceptado a
+favor de no cortar el stream.
+
+### Verificación
+- `npm run build` ✅ · `npm run typecheck` ✅ (0 errores) · `npm run lint` ✅
+- Restricciones respetadas: no se tocó `lib/llm.ts`, `lib/rag.ts`, migraciones ni
+  `middleware.ts`. El flujo de abrir un hilo existente y continuar queda intacto.

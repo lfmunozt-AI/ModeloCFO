@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { THREADS_CHANGED_EVENT, NEW_CHAT_EVENT } from "@/lib/chat-events";
 import type { Thread } from "@/lib/types";
 
 /**
@@ -17,7 +18,6 @@ export default function Sidebar() {
 
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
 
   async function loadThreads() {
     const res = await fetch("/api/threads");
@@ -30,17 +30,16 @@ export default function Sidebar() {
 
   useEffect(() => {
     loadThreads();
+    // Recarga la lista cuando el chat crea un hilo con el primer mensaje.
+    window.addEventListener(THREADS_CHANGED_EVENT, loadThreads);
+    return () => window.removeEventListener(THREADS_CHANGED_EVENT, loadThreads);
   }, []);
 
-  async function createThread() {
-    setCreating(true);
-    const res = await fetch("/api/threads", { method: "POST" });
-    setCreating(false);
-    if (res.ok) {
-      const { thread } = (await res.json()) as { thread: Thread };
-      setThreads((prev) => [thread, ...prev]);
-      router.push(`/chat/${thread.id}`);
-    }
+  // "Nuevo hilo": lleva a /chat (input activo, sin crear filas vacías). El hilo
+  // se materializa solo al enviar el primer mensaje.
+  function newChat() {
+    router.push("/chat");
+    window.dispatchEvent(new CustomEvent(NEW_CHAT_EVENT));
   }
 
   async function logout() {
@@ -54,11 +53,10 @@ export default function Sidebar() {
     <aside className="flex h-full w-64 flex-col border-r border-zinc-800 bg-zinc-950 text-zinc-100">
       <div className="p-3">
         <button
-          onClick={createThread}
-          disabled={creating}
-          className="w-full rounded-xl border border-zinc-700 px-3 py-2 text-sm font-medium hover:bg-zinc-800 disabled:opacity-50"
+          onClick={newChat}
+          className="w-full rounded-xl border border-zinc-700 px-3 py-2 text-sm font-medium hover:bg-zinc-800"
         >
-          {creating ? "Creando…" : "+ Nuevo hilo"}
+          + Nuevo hilo
         </button>
       </div>
 
