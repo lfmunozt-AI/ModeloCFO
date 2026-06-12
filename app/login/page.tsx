@@ -35,9 +35,7 @@ export default function LoginPage() {
     }
 
     if (mode === "signup") {
-      setError(
-        "Cuenta creada. Si la confirmación por email está activa, revisa tu bandeja antes de entrar.",
-      );
+      setError("Cuenta creada, inicia sesión.");
       setMode("signin");
       return;
     }
