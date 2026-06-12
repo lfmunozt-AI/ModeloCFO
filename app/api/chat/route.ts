@@ -99,7 +99,8 @@ export async function POST(req: NextRequest) {
     .reverse()
     .map((m) => ({ role: m.role as Role, content: m.content as string }));
 
-  // 3) Contexto RAG (stub de AG02 por ahora).
+  // 3) Contexto RAG real (AG02): embeddings de la consulta + match_chunks.
+  //    El contenido recuperado se inyecta delimitado como dato no confiable.
   const chunks = await retrieveContext(user.id, threadId, message);
   const context = formatContext(chunks);
   const systemPrompt = context ? `${SYSTEM_BASE}\n\n${context}` : SYSTEM_BASE;
