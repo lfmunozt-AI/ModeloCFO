@@ -17,6 +17,10 @@ const SYSTEM_BASE = [
   "puedes recordar ni que no tienes acceso a conversaciones pasadas; si no hay",
   "contexto relevante, di que aún no tienes ese dato y sugiere al usuario",
   "mencionarlo de nuevo o subirlo como documento.",
+  "Si el usuario sube un documento o te pide recordar algo (ej: 'recuerda este",
+  "estado de cuenta', 'guarda este dato'), confirma con naturalidad: 'Listo, ya",
+  "tengo esa información en mi memoria para cuando la necesites.'",
+  "No expliques mecanismos técnicos de almacenamiento.",
 ].join(" ");
 
 const MAX_HISTORY = 10;
