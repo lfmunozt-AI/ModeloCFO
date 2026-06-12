@@ -4,17 +4,13 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
-import {
-  THREADS_CHANGED_EVENT,
-  NEW_CHAT_EVENT,
-  DOCUMENTS_CHANGED_EVENT,
-} from "@/lib/chat-events";
-import type { Thread, Document, DocumentStatus } from "@/lib/types";
+import { THREADS_CHANGED_EVENT, NEW_CHAT_EVENT } from "@/lib/chat-events";
+import type { Thread } from "@/lib/types";
 
 /**
- * Barra lateral: lista de hilos (renombrar/eliminar), panel colapsable de
- * documentos con su estado de ingesta, nuevo hilo y logout. Carga datos en el
- * cliente desde /api/threads y /api/documents.
+ * Barra lateral: lista de hilos (renombrar/eliminar), nuevo hilo y logout. Carga
+ * los hilos en el cliente desde /api/threads. La memoria/documentos es invisible:
+ * la subida vive en MessageInput, sin panel aquí.
  */
 export default function Sidebar({
   onNavigate,
@@ -34,10 +30,6 @@ export default function Sidebar({
   const [editValue, setEditValue] = useState("");
   const [menuId, setMenuId] = useState<string | null>(null);
 
-  // Panel de documentos.
-  const [documents, setDocuments] = useState<Document[]>([]);
-  const [docsOpen, setDocsOpen] = useState(true);
-
   async function loadThreads() {
     const res = await fetch("/api/threads");
     if (res.ok) {
@@ -47,22 +39,11 @@ export default function Sidebar({
     setLoading(false);
   }
 
-  async function loadDocuments() {
-    const res = await fetch("/api/documents");
-    if (res.ok) {
-      const { documents } = (await res.json()) as { documents: Document[] };
-      setDocuments(documents);
-    }
-  }
-
   useEffect(() => {
     loadThreads();
-    loadDocuments();
     window.addEventListener(THREADS_CHANGED_EVENT, loadThreads);
-    window.addEventListener(DOCUMENTS_CHANGED_EVENT, loadDocuments);
     return () => {
       window.removeEventListener(THREADS_CHANGED_EVENT, loadThreads);
-      window.removeEventListener(DOCUMENTS_CHANGED_EVENT, loadDocuments);
     };
   }, []);
 
@@ -218,12 +199,6 @@ export default function Sidebar({
         )}
       </nav>
 
-      <DocumentsPanel
-        documents={documents}
-        open={docsOpen}
-        onToggle={() => setDocsOpen((o) => !o)}
-      />
-
       <div className="border-t border-zinc-800 p-3">
         <button
           onClick={logout}
@@ -233,64 +208,5 @@ export default function Sidebar({
         </button>
       </div>
     </aside>
-  );
-}
-
-const STATUS_STYLE: Record<DocumentStatus, { dot: string; label: string }> = {
-  processing: { dot: "bg-amber-500 animate-pulse", label: "Procesando" },
-  ready: { dot: "bg-emerald-500", label: "Listo" },
-  error: { dot: "bg-red-500", label: "Error" },
-};
-
-/** Sección colapsable con los documentos del usuario y su estado de ingesta. */
-function DocumentsPanel({
-  documents,
-  open,
-  onToggle,
-}: {
-  documents: Document[];
-  open: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="border-t border-zinc-800">
-      <button
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium uppercase tracking-wide text-zinc-500 hover:text-zinc-300 focus-visible:ring-2 focus-visible:ring-zinc-500"
-      >
-        <span>Documentos ({documents.length})</span>
-        <span aria-hidden>{open ? "▾" : "▸"}</span>
-      </button>
-      {open && (
-        <ul className="max-h-48 overflow-y-auto px-2 pb-2">
-          {documents.length === 0 ? (
-            <li className="px-3 py-2 text-xs text-zinc-600">
-              Sube un documento para darme contexto…
-            </li>
-          ) : (
-            documents.map((d) => {
-              const s = STATUS_STYLE[d.status] ?? STATUS_STYLE.processing;
-              return (
-                <li
-                  key={d.id}
-                  className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm text-zinc-300"
-                >
-                  <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${s.dot}`}
-                    title={s.label}
-                    aria-hidden
-                  />
-                  <span className="truncate" title={d.name}>
-                    {d.name}
-                  </span>
-                  <span className="sr-only">{s.label}</span>
-                </li>
-              );
-            })
-          )}
-        </ul>
-      )}
-    </div>
   );
 }
