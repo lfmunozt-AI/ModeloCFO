@@ -28,6 +28,21 @@ en una sola consulta. El system prompt deja claro al modelo que dispone de memor
 - `app/api/chat/route.ts` — **solo** `SYSTEM_BASE` (el modelo sabe que tiene
   memoria y no debe negarla) y el `onComplete` (ingesta del turno tras persistir la
   respuesta) + el import de `ingestMemoryExchange`. Nada más del route cambia.
+- `components/Sidebar.tsx` — (ajuste post-auditoría) eliminado el panel
+  "Documentos": componente `DocumentsPanel`, estado `documents`/`docsOpen`,
+  `loadDocuments`, el listener de `DOCUMENTS_CHANGED_EVENT` y `STATUS_STYLE`, con
+  limpieza de imports muertos. La memoria es invisible.
+
+## Ajustes post-auditoría (2026-06-13)
+Tras aprobar el núcleo, la auditoría pidió dos ajustes del prompt ampliado:
+1. **`SYSTEM_BASE`**: añadidas frases para que, cuando el usuario suba un documento
+   o pida recordar algo, el modelo confirme con naturalidad ("Listo, ya tengo esa
+   información en mi memoria…") **sin** explicar mecanismos técnicos de almacenamiento.
+2. **Sidebar sin panel "Documentos"**: la memoria/ingesta queda invisible para el
+   usuario. Se **conservan intactos** el clip de subida y el toast en `MessageInput`,
+   la ruta `/api/documents` y el export `DOCUMENTS_CHANGED_EVENT` en
+   `lib/chat-events.ts` (lo sigue usando `MessageInput`). Solo se retiró la UI del
+   panel en la Sidebar.
 
 ## Decisiones técnicas tomadas
 1. **`match_context` en SQL (UNION ALL), no dos RPC en código.** Un único
