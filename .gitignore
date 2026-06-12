@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (solo .env.example viaja al repo)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +40,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ─── BLINDAJE: datasets y pesos del modelo — JAMÁS en este repo público ───
+*.jsonl
+*.csv
+*.parquet
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.ckpt
+datasets/
+models/
+lora_*/
