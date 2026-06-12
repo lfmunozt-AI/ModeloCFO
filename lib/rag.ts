@@ -8,9 +8,12 @@ import type { RagChunk } from "./types";
  *   ingestDocument()  — parsea PDF/TXT/MD, trocea, embebe (Edge Function `embed`,
  *                       gte-small/384-dim) e inserta los chunks; marca el estado
  *                       del documento ('ready' | 'error').
- *   retrieveContext() — embebe la consulta y recupera los chunks más similares
- *                       del usuario vía match_chunks() (firma estable: la consume
- *                       app/api/chat/route.ts, runtime edge — no cambiar).
+ *   ingestMemoryExchange() — embebe el par Usuario/Asistente de un turno en
+ *                       memory_chunks (memoria conversacional; fire-and-forget).
+ *   retrieveContext() — embebe la consulta y recupera los fragmentos más similares
+ *                       del usuario vía match_context() (UNION de documentos +
+ *                       memoria; firma estable: la consume app/api/chat/route.ts,
+ *                       runtime edge — no cambiar).
  *   formatContext()   — aplana los chunks delimitando el contenido como DATO NO
  *                       CONFIABLE (defensa contra inyección de prompt).
  */
@@ -202,12 +205,59 @@ export async function ingestDocument(params: IngestParams): Promise<IngestResult
   }
 }
 
-// ── Recuperación (consumido por /api/chat, edge) ────────────────────────────────
+// ── Memoria conversacional (AG02 sesión 2) ──────────────────────────────────────
+
+// Intercambios triviales no merecen un recuerdo (saludos, "ok", "gracias"…).
+const MIN_MEMORY_CHARS = 15;
 
 /**
- * Embebe la consulta del usuario y devuelve los TOP_K chunks más similares de SUS
- * documentos (match_chunks filtra por auth.uid() + RLS). Nunca lanza: ante
- * cualquier fallo devuelve [] para no romper el flujo del chat.
+ * Embebe el par "Usuario/Asistente" de un turno y lo guarda en memory_chunks para
+ * que el RAG lo recupere en hilos futuros. Pensada para llamarse en el onComplete
+ * del chat. NUNCA lanza: cualquier fallo se registra y el chat continúa
+ * (fire-and-forget). Omite intercambios triviales (mensaje del usuario corto).
+ *
+ * Reutiliza el `supabase` de la request (su sesión) y la Edge Function `embed`.
+ */
+export async function ingestMemoryExchange(
+  supabase: SupabaseClient,
+  userId: string,
+  threadId: string,
+  userMessage: string,
+  assistantResponse: string,
+): Promise<void> {
+  try {
+    const trimmedUser = userMessage.trim();
+    if (trimmedUser.length < MIN_MEMORY_CHARS) return;
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+
+    const content = `Usuario: ${trimmedUser}\nAsistente: ${assistantResponse.trim()}`;
+    const [embedding] = await embedTexts(session.access_token, [content]);
+    if (!embedding) return;
+
+    const { error } = await supabase.from("memory_chunks").insert({
+      user_id: userId,
+      thread_id: threadId,
+      content,
+      embedding,
+    });
+    if (error) throw new Error(error.message);
+  } catch (err) {
+    console.error("ingestMemoryExchange falló (no bloquea el chat):", err);
+  }
+}
+
+// ── Recuperación unificada (consumido por /api/chat, edge) ───────────────────────
+
+/**
+ * Embebe la consulta del usuario y devuelve los TOP_K fragmentos más similares
+ * GLOBALES entre sus documentos y sus conversaciones anteriores, vía la función
+ * match_context (UNION de document_chunks + memory_chunks; filtra por auth.uid()
+ * + RLS). Cada fragmento llega etiquetado con su fuente (nombre del documento o
+ * "conversación de DD/MM/AAAA"). Nunca lanza: ante cualquier fallo devuelve [].
  *
  * Firma estable — la consume app/api/chat/route.ts. No cambiar sin coordinar.
  */
@@ -229,7 +279,7 @@ export async function retrieveContext(
     const [queryEmbedding] = await embedTexts(session.access_token, [q]);
     if (!queryEmbedding) return [];
 
-    const { data, error } = await supabase.rpc("match_chunks", {
+    const { data, error } = await supabase.rpc("match_context", {
       query_embedding: queryEmbedding,
       match_count: TOP_K,
     });
