@@ -28,6 +28,9 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // Edge Functions de Supabase: runtime Deno (globals Supabase.ai/Deno,
+      // imports jsr:). Tienen su propio toolchain, fuera del lint de Next.
+      "supabase/functions/**",
     ],
   },
 ];
