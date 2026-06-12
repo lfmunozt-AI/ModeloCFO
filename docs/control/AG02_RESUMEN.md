@@ -58,10 +58,20 @@ y recuperación delimitando el contenido como dato no confiable. Ingesta real en
    frontera de espacio. Heurística simple y suficiente; gte-small trunca a 512
    tokens, vamos por debajo.
 
+## Sincronización con main (rebase sobre el hotfix UX)
+Tras el hotfix de `main` (lazy thread creation: `threadId` opcional + header
+`X-Thread-Id`, y fix de `login`), rebase de `agent/02-datos` sobre `origin/main`:
+**sin conflictos**. Mi rama nunca tocó `app/api/chat/route.ts` ni `app/login/page.tsx`;
+la integración RAG vive en `lib/rag.ts` (firmas `retrieveContext`/`formatContext`
+intactas), que el route del hotfix ya invoca. Flujo final del chat: validar sesión →
+crear hilo si no viene `threadId` → persistir mensaje → `retrieveContext` (RAG real)
+→ `streamChat`. Único ajuste sobre el route: corregir un comentario obsoleto que
+seguía diciendo «stub».
+
 ## Verificación
-- `npm run typecheck` ✅ (0 errores)
-- `npm run lint` ✅ (0 errores/warnings)
-- `npm run build` ✅ (9 rutas). Aviso preexistente de `@supabase/ssr`
+- `npm run typecheck` ✅ (0 errores) — post-rebase
+- `npm run lint` ✅ (0 errores/warnings) — post-rebase
+- `npm run build` ✅ (9 rutas, post-rebase). Aviso preexistente de `@supabase/ssr`
   (`process.version` en edge) heredado de AG01; no bloquea el build.
 - Aislamiento multitenant: `supabase/tests/verify_isolation.sql` — como usuario A,
   `match_chunks` devuelve solo `doc-A.md`; como usuario B, solo `doc-B.md`, con el
