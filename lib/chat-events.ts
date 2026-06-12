@@ -6,3 +6,6 @@ export const THREADS_CHANGED_EVENT = "modelocfo:threads-changed";
 
 /** El usuario pidió un chat nuevo estando ya en /chat: reiniciar la ventana. */
 export const NEW_CHAT_EVENT = "modelocfo:new-chat";
+
+/** La lista de documentos cambió (p. ej. se subió uno desde el chat). */
+export const DOCUMENTS_CHANGED_EVENT = "modelocfo:documents-changed";
