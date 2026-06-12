@@ -15,6 +15,16 @@ const SYSTEM_BASE = [
 ].join(" ");
 
 const MAX_HISTORY = 10;
+const TITLE_MAX_WORDS = 6;
+const TITLE_MAX_CHARS = 40;
+
+/** Título del hilo a partir del primer mensaje: ~6 primeras palabras, máx 40 chars. */
+function deriveTitle(message: string): string {
+  const words = message.trim().split(/\s+/).slice(0, TITLE_MAX_WORDS).join(" ");
+  return words.length > TITLE_MAX_CHARS
+    ? words.slice(0, TITLE_MAX_CHARS).trimEnd()
+    : words;
+}
 
 export async function POST(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
@@ -33,21 +43,38 @@ export async function POST(req: NextRequest) {
     return new Response("Cuerpo JSON inválido", { status: 400 });
   }
 
-  const { threadId, message } = body;
-  if (!threadId || typeof message !== "string" || !message.trim()) {
-    return new Response("threadId y message son obligatorios", { status: 400 });
+  const { threadId: incomingThreadId, message } = body;
+  if (typeof message !== "string" || !message.trim()) {
+    return new Response("message es obligatorio", { status: 400 });
   }
 
-  // El hilo debe pertenecer al usuario (RLS lo refuerza; comprobamos para un 404 claro).
-  const { data: thread, error: threadErr } = await supabase
-    .from("threads")
-    .select("id")
-    .eq("id", threadId)
-    .eq("user_id", user.id)
-    .single();
+  // threadId opcional: si no viene, creamos el hilo al vuelo con título
+  // derivado del primer mensaje (así no existen hilos vacíos en la DB).
+  let threadId: string;
+  if (incomingThreadId) {
+    // El hilo debe pertenecer al usuario (RLS lo refuerza; comprobamos para un 404 claro).
+    const { data: thread, error: threadErr } = await supabase
+      .from("threads")
+      .select("id")
+      .eq("id", incomingThreadId)
+      .eq("user_id", user.id)
+      .single();
 
-  if (threadErr || !thread) {
-    return new Response("Hilo no encontrado", { status: 404 });
+    if (threadErr || !thread) {
+      return new Response("Hilo no encontrado", { status: 404 });
+    }
+    threadId = thread.id;
+  } else {
+    const { data: created, error: createErr } = await supabase
+      .from("threads")
+      .insert({ user_id: user.id, title: deriveTitle(message) })
+      .select("id")
+      .single();
+
+    if (createErr || !created) {
+      return new Response("No se pudo crear el hilo", { status: 500 });
+    }
+    threadId = created.id;
   }
 
   // 1) Persiste el mensaje del usuario.
@@ -95,6 +122,8 @@ export async function POST(req: NextRequest) {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
+      // El cliente lo usa para adoptar el hilo recién creado sin recargar.
+      "X-Thread-Id": threadId,
     },
   });
 }
