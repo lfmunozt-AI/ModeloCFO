@@ -27,6 +27,12 @@ const MAX_HISTORY = 10;
 const TITLE_MAX_WORDS = 6;
 const TITLE_MAX_CHARS = 40;
 
+// Rate limiting sin infraestructura nueva: contamos los mensajes de rol 'user'
+// del propio usuario en la última hora (vía join messages→threads, scope RLS) y
+// rechazamos con 429 si supera el límite. Configurable por entorno.
+const RATE_LIMIT_PER_HOUR = Number(process.env.RATE_LIMIT_PER_HOUR) || 40;
+const RATE_WINDOW_MS = 60 * 60 * 1000;
+
 /** Título del hilo a partir del primer mensaje: ~6 primeras palabras, máx 40 chars. */
 function deriveTitle(message: string): string {
   const words = message.trim().split(/\s+/).slice(0, TITLE_MAX_WORDS).join(" ");
@@ -55,6 +61,26 @@ export async function POST(req: NextRequest) {
   const { threadId: incomingThreadId, message } = body;
   if (typeof message !== "string" || !message.trim()) {
     return new Response("message es obligatorio", { status: 400 });
+  }
+
+  // Rate limiting: cuenta los mensajes 'user' del usuario en la última hora.
+  // `threads!inner` + filtro por user_id garantiza el conteo solo de SUS hilos
+  // (además del scope RLS). Se hace antes de crear hilo/persistir/llamar al LLM,
+  // así un usuario limitado no genera hilos vacíos ni gasto de inferencia.
+  const since = new Date(Date.now() - RATE_WINDOW_MS).toISOString();
+  const { count: recentCount } = await supabase
+    .from("messages")
+    .select("id, threads!inner(user_id)", { count: "exact", head: true })
+    .eq("threads.user_id", user.id)
+    .eq("role", "user")
+    .gte("created_at", since);
+
+  if ((recentCount ?? 0) >= RATE_LIMIT_PER_HOUR) {
+    return new Response(
+      `Has alcanzado el límite de ${RATE_LIMIT_PER_HOUR} mensajes por hora. ` +
+        "Espera unos minutos antes de enviar más.",
+      { status: 429, headers: { "Retry-After": "3600" } },
+    );
   }
 
   // threadId opcional: si no viene, creamos el hilo al vuelo con título
