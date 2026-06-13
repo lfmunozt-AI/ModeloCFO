@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { retrieveContext, formatContext, ingestMemoryExchange } from "@/lib/rag";
 import { streamChat } from "@/lib/llm";
+import { deriveTitle } from "@/lib/utils";
 import type { ChatMessage, Role } from "@/lib/types";
 
 // Edge: latencia baja y streaming nativo. La abstracción del LLM (lib/llm.ts) y
@@ -24,22 +25,12 @@ const SYSTEM_BASE = [
 ].join(" ");
 
 const MAX_HISTORY = 10;
-const TITLE_MAX_WORDS = 6;
-const TITLE_MAX_CHARS = 40;
 
 // Rate limiting sin infraestructura nueva: contamos los mensajes de rol 'user'
 // del propio usuario en la última hora (vía join messages→threads, scope RLS) y
 // rechazamos con 429 si supera el límite. Configurable por entorno.
 const RATE_LIMIT_PER_HOUR = Number(process.env.RATE_LIMIT_PER_HOUR) || 40;
 const RATE_WINDOW_MS = 60 * 60 * 1000;
-
-/** Título del hilo a partir del primer mensaje: ~6 primeras palabras, máx 40 chars. */
-function deriveTitle(message: string): string {
-  const words = message.trim().split(/\s+/).slice(0, TITLE_MAX_WORDS).join(" ");
-  return words.length > TITLE_MAX_CHARS
-    ? words.slice(0, TITLE_MAX_CHARS).trimEnd()
-    : words;
-}
 
 export async function POST(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
