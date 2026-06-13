@@ -1,0 +1,45 @@
+name: CI
+
+# Se ejecuta en cada Pull Request hacia main. NUNCA pull_request_target:
+# ese disparador corre con el token de la base y expone secretos a forks.
+on:
+  pull_request:
+    branches: [main]
+
+# Permisos mínimos a nivel de workflow: solo lectura del repo. Ningún job
+# necesita escribir nada (ni statuses, ni packages, ni contenidos).
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: lint · typecheck · build · test
+    runs-on: ubuntu-latest
+    steps:
+      # Acciones de terceros fijadas por SHA COMPLETO (no por tag móvil): un tag
+      # puede reapuntarse a código malicioso; el SHA es inmutable.
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+
+      # npm ci (NUNCA npm install): instalación reproducible y exacta desde el
+      # lockfile; falla si package.json y package-lock.json divergen.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
