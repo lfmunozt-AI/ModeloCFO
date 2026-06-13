@@ -44,10 +44,15 @@ export async function PATCH(
     .eq("id", id)
     .eq("user_id", user.id)
     .select("id, title, created_at, user_id")
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
     return new Response("No se pudo renombrar el hilo", { status: 500 });
+  }
+  // Sin fila: el hilo no existe o no es del usuario (RLS lo oculta). No es un
+  // error del servidor → 404, nunca 500. No revela si existe pero es de otro.
+  if (!data) {
+    return new Response("Hilo no encontrado", { status: 404 });
   }
 
   return Response.json({ thread: data });
@@ -66,14 +71,20 @@ export async function DELETE(
     return new Response("No autorizado", { status: 401 });
   }
 
-  const { error } = await supabase
+  // `select()` tras el delete devuelve las filas afectadas: si está vacío, no se
+  // borró nada porque el hilo no existe o es de otro usuario (RLS lo filtra).
+  const { data, error } = await supabase
     .from("threads")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .select("id");
 
   if (error) {
     return new Response("No se pudo eliminar el hilo", { status: 500 });
+  }
+  if (!data || data.length === 0) {
+    return new Response("Hilo no encontrado", { status: 404 });
   }
 
   return new Response(null, { status: 204 });
