@@ -15,6 +15,10 @@ import { ingestDocument, type DocumentKind } from "@/lib/rag";
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
+// Rate limiting de ingesta: máximo N documentos por usuario y día (24 h móviles).
+const RATE_LIMIT_UPLOADS_DAY = Number(process.env.RATE_LIMIT_UPLOADS_DAY) || 10;
+const UPLOAD_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 // Tipos aceptados → clase de parseo. Aceptamos por extensión y por MIME, porque
 // los navegadores reportan los .md de forma inconsistente (text/plain o vacío).
 const EXT_KIND: Record<string, DocumentKind> = {
@@ -74,6 +78,25 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getSession();
   if (!session?.access_token) {
     return new Response("Sesión inválida", { status: 401 });
+  }
+
+  // Rate limiting: nº de documentos del usuario en las últimas 24 h (scope RLS
+  // + filtro explícito por user_id). Se comprueba antes de leer el multipart y
+  // de lanzar el pipeline de embeddings, para fallar barato.
+  const since = new Date(Date.now() - UPLOAD_WINDOW_MS).toISOString();
+  const { count: recentUploads } = await supabase
+    .from("documents")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .gte("created_at", since);
+
+  if ((recentUploads ?? 0) >= RATE_LIMIT_UPLOADS_DAY) {
+    return Response.json(
+      {
+        error: `Has alcanzado el límite de ${RATE_LIMIT_UPLOADS_DAY} documentos por día. Inténtalo de nuevo mañana.`,
+      },
+      { status: 429, headers: { "Retry-After": "86400" } },
+    );
   }
 
   // Parseo del multipart.
