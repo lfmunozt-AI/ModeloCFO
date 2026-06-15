@@ -50,15 +50,15 @@ export default function WelcomePanel({ onStart, disabled }: WelcomePanelProps) {
           </p>
           <p>
             Lo que ves ahora es la interfaz de evaluación, no el producto final.
-            La versión MVP de Monoend será un AaaS (Agent as a Service)
-            predictivo capaz de guiar en tiempo real el cumplimiento de cada
-            meta financiera personal, tomando acciones autónomas con tu
-            consentimiento previo. El acercamiento al 100% de tus objetivos
-            depende directamente de la calidad de la información que entregues al
-            modelo.
+            La versión oficial tras su lanzamiento se llamará Monoend y será
+            un AaaS (Agent as a Service) predictivo capaz de guiar en tiempo
+            real el cumplimiento de cada meta financiera personal, tomando
+            acciones autónomas con tu consentimiento previo. El acercamiento 
+            al 100% de tus objetivos depende directamente de la calidad 
+            de la información que entregues al modelo.
           </p>
           <p>
-            Hola, soy The Consigliere, un modelo creado por andgcore Corporate.
+            Soy The Consigliere, un modelo creado por andgcore Corporate.
             Aprendo de cada conversación — si una respuesta te parece útil o
             puede mejorar, dímelo con 👍 o 👎. Tu criterio contribuye
             directamente a mi entrenamiento y me hace más preciso con cada
