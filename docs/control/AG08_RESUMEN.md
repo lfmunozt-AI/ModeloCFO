@@ -22,6 +22,10 @@ lectores no técnicos.
   Nuevo system prompt de The Consigliere (identidad/tono, memoria, primera
   sesión con los 3 starters, manejo de feedback negativo). Nada más del archivo
   se tocó.
+- `scripts/export-rlhf.ts` — **modificado**: la constante `SYSTEM_PROMPT_BASE`
+  (campo `instruction` del dataset Alpaca) se sincroniza **carácter a carácter**
+  con el nuevo `SYSTEM_BASE` de `route.ts`. El dataset RLHF debe ser consistente
+  con el prompt con el que el modelo generó las respuestas.
 - `lib/starters.ts` — **nuevo**: `CONVERSATION_STARTERS` (tupla `as const`) y el
   tipo `ConversationStarter`.
 - `docs/ORACLE_VOICE.md` — **nuevo**: traducción humana del system prompt
