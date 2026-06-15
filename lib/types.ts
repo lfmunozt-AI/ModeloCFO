@@ -3,9 +3,15 @@
 export type Role = "system" | "user" | "assistant";
 
 export interface ChatMessage {
+  /** id real del mensaje persistido. Ausente mientras es optimista/streaming;
+   *  necesario para enviar feedback RLHF (👍/👎). */
+  id?: string;
   role: Role;
   content: string;
 }
+
+/** Valoración RLHF de una respuesta del asistente. */
+export type FeedbackRating = "positive" | "negative";
 
 export interface Thread {
   id: string;
