@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "export-rlhf": "tsx scripts/export-rlhf.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
