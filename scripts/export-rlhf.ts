@@ -17,6 +17,7 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import ws from "ws";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -147,7 +148,8 @@ function resolveOutputPath(argv: string[]): string {
 async function main(): Promise<void> {
   const admin: SupabaseClient = createClient(SUPABASE_URL!, SERVICE_ROLE_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
-  });
+realtime: { transport: ws },  
+});
 
   const outputPath = resolveOutputPath(process.argv.slice(2));
 
