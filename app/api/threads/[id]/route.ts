@@ -4,6 +4,9 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 /**
  * Gestión de un hilo concreto del usuario.
  *
+ * GET    — mensajes del hilo (id, role, content) en orden cronológico. El cliente
+ *          lo usa para hidratar los ids reales tras crear/responder un mensaje
+ *          por streaming (el id habilita el feedback 👍/👎).
  * PATCH  — renombra el hilo ({ title }).
  * DELETE — elimina el hilo (sus mensajes caen por ON DELETE CASCADE).
  *
@@ -11,6 +14,44 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  * (`threads_owner`, FOR ALL) hace de red de seguridad. Nunca se acepta user_id
  * del cliente.
  */
+
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return new Response("No autorizado", { status: 401 });
+  }
+
+  // Comprueba propiedad del hilo (filtro explícito + RLS). Sin fila → 404, sin
+  // revelar si existe pero es de otro usuario.
+  const { data: thread } = await supabase
+    .from("threads")
+    .select("id")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!thread) {
+    return new Response("Hilo no encontrado", { status: 404 });
+  }
+
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id, role, content")
+    .eq("thread_id", id)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return new Response("No se pudieron cargar los mensajes", { status: 500 });
+  }
+
+  return Response.json({ messages: data ?? [] });
+}
 
 export async function PATCH(
   req: NextRequest,
