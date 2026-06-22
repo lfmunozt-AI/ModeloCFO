@@ -8,8 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test lib/guardrail/*.test.ts",
-    "seed": "tsx scripts/seed.ts"
+    "test": "vitest run && node --import tsx --test lib/guardrail/*.test.ts",
+    "test:watch": "vitest",
+    "test:guardrail": "node --import tsx --test lib/guardrail/*.test.ts",
+    "seed": "tsx scripts/seed.ts",
+    "export-rlhf": "tsx scripts/export-rlhf.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -20,6 +23,7 @@
     "react-dom": "19.1.0",
     "react-markdown": "^10.1.0",
     "unpdf": "^0.12.1",
+    "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -28,10 +32,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
     "eslint": "^9",
     "eslint-config-next": "15.5.19",
     "tailwindcss": "^4",
     "tsx": "^4.19.2",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.8"
   }
 }
