@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && node --import tsx --test lib/guardrail/*.test.ts",
     "test:watch": "vitest",
+    "test:guardrail": "node --import tsx --test lib/guardrail/*.test.ts",
     "seed": "tsx scripts/seed.ts",
     "export-rlhf": "tsx scripts/export-rlhf.ts"
   },
@@ -22,7 +23,8 @@
     "react-dom": "19.1.0",
     "react-markdown": "^10.1.0",
     "unpdf": "^0.12.1",
-    "ws": "^8.21.0"
+    "ws": "^8.21.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
