@@ -1,16 +1,20 @@
 import { defineConfig, configDefaults } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
-// Cada suite corre con su propio runner:
-//   - vitest     → tests del resto del proyecto (p. ej. AG07).
-//   - node:test  → guardarraíl (lib/guardrail/**), vía `npm run test:guardrail`.
-//
-// El guardarraíl está escrito con el runner nativo `node:test`, que vitest no
-// sabe interpretar; por eso se excluye aquí. `passWithNoTests` evita que
-// `vitest run` falle cuando todavía no hay tests de vitest en la rama (los del
-// guardarraíl los ejecuta node:test en el segundo tramo del script `test`).
+// Tests del backend con vitest: funciones puras (lib/) y handlers de ruta.
+// El guardarraíl (lib/guardrail/**) usa node:test, no vitest — se excluye
+// explícitamente y se corre con `npm run test:guardrail`.
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./", import.meta.url)),
+    },
+  },
   test: {
+    environment: "node",
+    include: ["tests/**/*.test.ts"],
     exclude: [...configDefaults.exclude, "lib/guardrail/**"],
+    globals: false,
     passWithNoTests: true,
   },
 });
