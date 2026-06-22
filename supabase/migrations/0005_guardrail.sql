@@ -1,5 +1,5 @@
 -- ModeloCFO — Guardarraíl de cifras (AG02b).
--- Parte de 0001/0002/0003: NO recrea nada, solo añade la bitácora del
+-- Parte de 0001/0002/0003/0004: NO recrea nada, solo añade la bitácora del
 -- guardarraíl. Cada vez que el validador de grounding bloquea un monto que el
 -- modelo no podía justificar, se registra aquí.
 --

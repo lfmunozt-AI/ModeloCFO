@@ -44,7 +44,7 @@ Para cada cifra de la respuesta:
   - **MVP** (por defecto): reemplaza la frase que contiene el monto inventado
     por una petición de dato (`"Para darte esa cifra necesito conocer tu …"`).
   - **passthrough**: no reescribe, solo registra (para medir sin alterar la UX).
-- Log → tabla `guardrail_log` (migración `0004_guardrail.sql`). **Solo
+- Log → tabla `guardrail_log` (migración `0005_guardrail.sql`). **Solo
   metadatos**: `{ blocked_value, blocked_text, reason, question_hash }`. Nunca
   el mensaje del usuario ni la respuesta del modelo; la pregunta se referencia
   por hash SHA‑256 (16 chars). RLS por `user_id`.
