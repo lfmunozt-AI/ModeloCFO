@@ -12,9 +12,9 @@ export async function GET() {
     return new Response("No autorizado", { status: 401 });
   }
 
-  const { data, error } = await supabase
+  const { data, error, count } = await supabase
     .from("threads")
-    .select("id, title, created_at, user_id")
+    .select("id, title, created_at, user_id", { count: "exact" })
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -22,7 +22,8 @@ export async function GET() {
     return new Response("No se pudieron cargar los hilos", { status: 500 });
   }
 
-  return Response.json({ threads: data });
+  // `total`: lo usa el WelcomePanel para detectar la primera sesión (total=0).
+  return Response.json({ threads: data, total: count ?? data?.length ?? 0 });
 }
 
 /** Crea un nuevo hilo para el usuario. */

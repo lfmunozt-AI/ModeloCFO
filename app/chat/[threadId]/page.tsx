@@ -27,11 +27,12 @@ export default async function ThreadPage({
 
   const { data: messages } = await supabase
     .from("messages")
-    .select("role, content")
+    .select("id, role, content")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true });
 
   const initialMessages: ChatMessage[] = (messages ?? []).map((m) => ({
+    id: m.id as string,
     role: m.role as Role,
     content: m.content as string,
   }));

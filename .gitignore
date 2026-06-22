@@ -51,5 +51,6 @@ next-env.d.ts
 *.pt
 *.ckpt
 datasets/
+exports/
 models/
 lora_*/
