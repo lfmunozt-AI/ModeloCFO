@@ -20,18 +20,29 @@ export interface NumberMention {
 }
 
 // ── Dígitos ──────────────────────────────────────────────────────────────────
-// 1ª alternativa: grupos de miles con punto (1.200, 1.200.000) y coma decimal
-//                 opcional (1.200,50).
-// 2ª alternativa: dígitos llanos con coma decimal opcional (40000, 2000,50).
-// Los lookarounds evitan enganchar trozos de un número más largo.
-const DIGIT_RE = /(?<!\d)\d{1,3}(?:\.\d{3})+(?:,\d+)?(?!\d)|(?<!\d)\d+(?:,\d+)?(?!\d)/g;
+// Grupo 1 (el número), tres alternativas:
+//   a) miles con punto (1.200, 1.200.000) y coma decimal opcional (1.200,50).
+//   b) miles con ESPACIO (2 500, 1 200 000) y coma decimal opcional.
+//   c) dígitos llanos con coma decimal opcional (40000, 2000,50).
+// Grupo 2 (opcional): sufijo "k"/"K" → ×1000 ("2,5k" = 2500). El sufijo solo se
+// consume si NO va seguido de otra letra, para no comerse "2kg".
+// Los lookarounds evitan enganchar trozos de un número más largo. La alternativa
+// de espacio exige grupos de EXACTAMENTE 3 dígitos, así "2 500" se une pero
+// "2500 500" (ya de 4 dígitos) o "2 cosas" no.
+const DIGIT_RE =
+  /(?<!\d)(\d{1,3}(?:\.\d{3})+(?:,\d+)?|\d{1,3}(?: \d{3})+(?:,\d+)?|\d+(?:,\d+)?)(k(?![\p{L}]))?(?!\d)/giu;
 
-/** Parsea un literal de dígitos en convención es/LatAm a número. */
+/**
+ * Parsea un literal de dígitos en convención es/LatAm a número.
+ * El espacio es separador de miles (se elimina), igual que el punto; la coma es
+ * el decimal. El sufijo "k" NO llega aquí (lo aplica `findNumberMentions`).
+ */
 export function parseDigitAmount(raw: string): number {
+  const noSpaces = raw.replace(/\s/g, "");
   // Si tiene punto, es separador de miles → se elimina. La coma es decimal.
-  const normalized = raw.includes(".")
-    ? raw.replace(/\./g, "").replace(",", ".")
-    : raw.replace(",", ".");
+  const normalized = noSpaces.includes(".")
+    ? noSpaces.replace(/\./g, "").replace(",", ".")
+    : noSpaces.replace(",", ".");
   return Number.parseFloat(normalized);
 }
 
@@ -114,12 +125,14 @@ const WORD_RE = /[\p{L}]+/gu;
 export function findNumberMentions(text: string): NumberMention[] {
   const mentions: NumberMention[] = [];
 
-  // 1) Dígitos.
+  // 1) Dígitos. m[1] = el número; m[2] = sufijo "k" opcional (×1000).
   for (const m of text.matchAll(DIGIT_RE)) {
     const raw = m[0];
+    const numero = m[1];
+    const tieneK = Boolean(m[2]);
     const start = m.index ?? 0;
     mentions.push({
-      value: parseDigitAmount(raw),
+      value: parseDigitAmount(numero) * (tieneK ? 1000 : 1),
       text: raw,
       start,
       end: start + raw.length,
