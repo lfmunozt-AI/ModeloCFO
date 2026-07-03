@@ -6,8 +6,23 @@
 //
 // Código PURO (regex + lógica), edge-safe, SIN llamadas a ningún LLM (~ms).
 
-import { findNumberMentions, dedupeOverlaps } from "./numbers";
+import { findNumberMentions, dedupeOverlaps, type NumberMention } from "./numbers";
 import { detectCurrency, detectLabel, isTimeUnit, type Moneda } from "./context";
+
+// Contextos NO monetarios: la cifra cuantifica personas/veces/edad, no dinero.
+// "dos hijos", "3 personas", "2 veces", "30 años de edad" no son hechos-cifra.
+// La palabra debe seguir directamente a la cifra (ventana corta).
+const NON_MONETARY_AFTER =
+  /^\s*(?:hijos?|hijas?|personas?|veces|vez|anos?\s+de\s+edad)\b/;
+
+function stripAccents(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** ¿La cifra cuantifica algo NO monetario (personas, veces, edad)? */
+function isNonMonetaryQuantity(text: string, m: NumberMention): boolean {
+  return NON_MONETARY_AFTER.test(stripAccents(text.slice(m.end, m.end + 20)));
+}
 
 /** Un hecho verificado aportado por el usuario. */
 export interface VerifiedFact {
@@ -38,6 +53,8 @@ export function extractInputFacts(message: string): VerifiedFact[] {
   for (const m of mentions) {
     // Una duración ("contrato a 12 meses") no es un monto: no es un "hecho cifra".
     if (isTimeUnit(message, m)) continue;
+    // Una cantidad no monetaria ("dos hijos", "30 años de edad") tampoco lo es.
+    if (isNonMonetaryQuantity(message, m)) continue;
 
     facts.push({
       valor: m.value,

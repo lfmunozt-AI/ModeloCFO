@@ -98,13 +98,47 @@ function exactMatch(a: number, b: number): boolean {
 }
 
 /**
+ * CIERRE ARITMÉTICO DEL PAQUETE. Con el motor financiero presente, una cifra `v`
+ * cuenta como cálculo verificado si coincide (±0.01) con la suma o la resta de:
+ *   - dos cifras calculadas, o
+ *   - una calculada y un hecho del usuario.
+ * La coincidencia directa con una cifra calculada se comprueba aparte
+ * (exactMatch); aquí solo se cubren las combinaciones de dos operandos.
+ */
+function matchesPackageClosure(
+  v: number,
+  cifrasCalculadas: number[],
+  facts: VerifiedFact[],
+): boolean {
+  // Suma/resta de DOS cifras calculadas.
+  for (let i = 0; i < cifrasCalculadas.length; i++) {
+    for (let j = i + 1; j < cifrasCalculadas.length; j++) {
+      if (exactMatch(v, cifrasCalculadas[i] + cifrasCalculadas[j])) return true;
+      if (exactMatch(v, Math.abs(cifrasCalculadas[i] - cifrasCalculadas[j]))) return true;
+    }
+  }
+  // Suma/resta de una calculada y un hecho del usuario.
+  const factValues = facts.map((f) => f.valor).filter((x) => Number.isFinite(x));
+  for (const c of cifrasCalculadas) {
+    for (const f of factValues) {
+      if (exactMatch(v, c + f)) return true;
+      if (exactMatch(v, Math.abs(c - f))) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Valida el grounding de todas las cifras de la respuesta del modelo contra los
  * hechos verificados del usuario.
  *
  * `cifrasCalculadas` (opcional) son los resultados EXACTOS del motor financiero
- * (lib/calculator). Una cifra de la respuesta que coincida exactamente (±0.01)
- * con una calculada se aprueba como "calculo" ANTES de probar los
- * multiplicadores heurísticos: el cálculo verificado manda sobre la heurística.
+ * (lib/calculator). CUANDO EL PAQUETE ESTÁ PRESENTE (length > 0) el motor manda:
+ * una cifra se aprueba como "calculo" si coincide exactamente (±0.01) con una
+ * calculada o con el CIERRE ARITMÉTICO del paquete (suma/resta de dos calculadas
+ * o de una calculada y un hecho); NO se aplican los multiplicadores heurísticos
+ * sobre los hechos. CUANDO EL PAQUETE ESTÁ VACÍO, la heurística de derivación
+ * (COMMON_MULTIPLIERS + sumas de pares) sigue intacta como red de respaldo.
  * El parámetro es opcional para no romper la firma ni los tests existentes.
  */
 export function validateGrounding(
@@ -128,6 +162,10 @@ export function validateGrounding(
 
   const factValues = facts.map((f) => f.valor);
 
+  // Con paquete del motor (cifras calculadas presentes), la heurística de
+  // multiplicadores se desactiva: manda el motor (punto 2 de la calibración).
+  const usarMotor = cifrasCalculadas.length > 0;
+
   for (const m of figs) {
     const moneda = detectCurrency(modelResponse, m);
 
@@ -146,17 +184,29 @@ export function validateGrounding(
       aprobadas.push({ ...base(m, moneda), categoria: "hecho", motivo: "dato del usuario" });
       continue;
     }
-    // (c0) Coincide EXACTAMENTE con una cifra del motor financiero. Se prueba
-    // ANTES de las heurísticas: si el código ya calculó esta cifra, es cálculo
-    // verificado, no una coincidencia aproximada.
-    if (cifrasCalculadas.some((c) => exactMatch(m.value, c))) {
-      aprobadas.push({ ...base(m, moneda), categoria: "calculo", motivo: "cálculo verificado por el motor financiero" });
-      continue;
-    }
-    // (c) Se deriva por cálculo de un hecho.
-    if (isDerived(m.value, facts, explicitPercents)) {
-      aprobadas.push({ ...base(m, moneda), categoria: "calculo", motivo: "cálculo sobre un dato del usuario" });
-      continue;
+    if (usarMotor) {
+      // (c0) Coincide EXACTAMENTE con una cifra del motor financiero. Se prueba
+      // ANTES de cualquier heurística: si el código ya calculó esta cifra, es
+      // cálculo verificado, no una coincidencia aproximada.
+      if (cifrasCalculadas.some((c) => exactMatch(m.value, c))) {
+        aprobadas.push({ ...base(m, moneda), categoria: "calculo", motivo: "cálculo verificado por el motor financiero" });
+        continue;
+      }
+      // (c1) Cierre aritmético del paquete: suma/resta de dos calculadas, o de
+      // una calculada y un hecho del usuario.
+      if (matchesPackageClosure(m.value, cifrasCalculadas, facts)) {
+        aprobadas.push({ ...base(m, moneda), categoria: "calculo", motivo: "cierre aritmético del paquete del motor" });
+        continue;
+      }
+      // Con motor presente NO se aplican multiplicadores heurísticos: el motor
+      // manda. Cualquier cifra que no case cae al bloqueo (d).
+    } else {
+      // (c) Sin motor: red de respaldo heurística — derivación por cálculo simple
+      // sobre un hecho (múltiplos/fracciones limpias, sumas/restas de pares).
+      if (isDerived(m.value, facts, explicitPercents)) {
+        aprobadas.push({ ...base(m, moneda), categoria: "calculo", motivo: "cálculo sobre un dato del usuario" });
+        continue;
+      }
     }
     // (d) Monto absoluto sin respaldo → se bloquea.
     bloqueadas.push({

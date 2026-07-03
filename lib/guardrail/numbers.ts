@@ -119,6 +119,26 @@ function combineWords(tokens: string[]): number {
 const WORD_RE = /[\p{L}]+/gu;
 
 /**
+ * ¿La mención de dígitos es un marcador de lista markdown? Un dígito a comienzo
+ * de línea (solo espacios/tabs antes) seguido de "." o ")" es un ordinal de
+ * enumeración, no una cifra:  "1. Ahorro", "2) Ocio".  No confundir con miles
+ * ("1.200"): ahí el punto va pegado a tres dígitos y la mención abarca todo el
+ * número, por lo que el carácter en `end` no es "." ni ")".
+ */
+function isListMarker(text: string, start: number, end: number): boolean {
+  // Antes de la cifra: solo espacios/tabs hasta el inicio de línea.
+  let i = start - 1;
+  while (i >= 0 && (text[i] === " " || text[i] === "\t")) i--;
+  const atLineStart = i < 0 || text[i] === "\n";
+  if (!atLineStart) return false;
+  // Después de la cifra: "." o ")" seguido de espacio o fin de texto.
+  const after = text[end];
+  if (after !== "." && after !== ")") return false;
+  const next = text[end + 1];
+  return next === undefined || /\s/.test(next);
+}
+
+/**
  * Localiza todas las menciones numéricas (dígitos y palabras) de un texto,
  * con su posición. Es la primitiva común de extracción del guardarraíl.
  */
@@ -131,11 +151,14 @@ export function findNumberMentions(text: string): NumberMention[] {
     const numero = m[1];
     const tieneK = Boolean(m[2]);
     const start = m.index ?? 0;
+    const end = start + raw.length;
+    // Marcador de lista markdown ("1.", "2)") → no es una cifra, se ignora.
+    if (isListMarker(text, start, end)) continue;
     mentions.push({
       value: parseDigitAmount(numero) * (tieneK ? 1000 : 1),
       text: raw,
       start,
-      end: start + raw.length,
+      end,
       kind: "digit",
     });
   }

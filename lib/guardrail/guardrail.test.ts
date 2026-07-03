@@ -72,6 +72,19 @@ test("Pieza 1: sin cifras → lista vacía (sin contexto)", () => {
   assert.deepEqual(extractInputFacts(""), []);
 });
 
+test("Pieza 1 (02d): cantidad no monetaria (hijos) se descarta; el ingreso queda", () => {
+  const facts = extractInputFacts("tengo dos hijos y gano 2500");
+  assert.equal(facts.length, 1, "solo el ingreso es un hecho-cifra");
+  assert.equal(facts[0].valor, 2500);
+  assert.equal(facts[0].etiqueta, "ingreso");
+});
+
+test("Pieza 1 (02d): 'personas', 'veces' y 'años de edad' no son montos", () => {
+  assert.deepEqual(extractInputFacts("somos 4 personas"), []);
+  assert.deepEqual(extractInputFacts("lo pagué 3 veces"), []);
+  assert.deepEqual(extractInputFacts("tengo 30 años de edad"), []);
+});
+
 // ── PIEZA 2 — validador de grounding ────────────────────────────────────────────
 test("CASO A1: '40000 en deudas' + respuesta inventa '1500 de intereses'", () => {
   const facts = extractInputFacts("Tengo 40000 en deudas");
@@ -131,6 +144,50 @@ test("Pieza 2: suma de dos hechos se deriva", () => {
   const r = validateGrounding("En total debes 40000.", facts);
   assert.ok(r.cifras_aprobadas.some((c) => c.valor === 40000));
   assert.equal(r.cifras_bloqueadas.length, 0);
+});
+
+// ── CALIBRACIÓN 02d — cierre aritmético del paquete del motor ─────────────────
+test("Cierre aritmético: resta y suma de dos calculadas se aprueban; ajena se bloquea", () => {
+  const facts = [
+    { valor: 2500, etiqueta: "ingreso", moneda: null },
+    { valor: 1500, etiqueta: "gasto", moneda: null },
+  ];
+  const calculadas = [1000, 300, 3600];
+  const respuesta = "Te quedan 700, podrías destinar 1300 y evita gastar 449.";
+  const r = validateGrounding(respuesta, facts, calculadas);
+
+  const aprob = r.cifras_aprobadas.map((c) => c.valor);
+  const bloq = r.cifras_bloqueadas.map((c) => c.valor);
+  assert.ok(aprob.includes(700), "700 = 1000-300 debe APROBARSE (cierre)");
+  assert.ok(aprob.includes(1300), "1300 = 1000+300 debe APROBARSE (cierre)");
+  assert.ok(bloq.includes(449), "449 no cierra con el paquete → BLOQUEADO");
+});
+
+test("Cierre aritmético: suma de una calculada y un hecho del usuario se aprueba", () => {
+  const facts = [{ valor: 2500, etiqueta: "ingreso", moneda: null }];
+  const calculadas = [1000];
+  const r = validateGrounding("El total sería 3500.", facts, calculadas);
+  assert.equal(r.cifras_bloqueadas.length, 0);
+  assert.ok(
+    r.cifras_aprobadas.some((c) => c.valor === 3500 && c.categoria === "calculo"),
+    "3500 = 1000+2500 (calculada + hecho) debe APROBARSE",
+  );
+});
+
+// ── CALIBRACIÓN 02d — heurística condicionada al paquete ──────────────────────
+test("Heurística condicionada: con paquete, 450 (=30% de 1500) se BLOQUEA", () => {
+  const facts = [{ valor: 1500, etiqueta: "ingreso", moneda: null }];
+  const calculadas = [300, 1200]; // paquete presente → el motor manda
+  const r = validateGrounding("Podrías ahorrar 450 al mes.", facts, calculadas);
+  const bloq = r.cifras_bloqueadas.map((c) => c.valor);
+  assert.ok(bloq.includes(450), "con motor, 450 heurístico (30%) debe BLOQUEARSE");
+});
+
+test("Heurística condicionada: SIN paquete, 450 (=30% de 1500) se APRUEBA (red de respaldo)", () => {
+  const facts = [{ valor: 1500, etiqueta: "ingreso", moneda: null }];
+  const r = validateGrounding("Podrías ahorrar 450 al mes.", facts); // sin cifrasCalculadas
+  assert.equal(r.cifras_bloqueadas.length, 0, "sin motor, la heurística de siempre aplica");
+  assert.ok(r.cifras_aprobadas.some((c) => c.valor === 450 && c.categoria === "calculo"));
 });
 
 // ── PIEZA 3 — política + log ──────────────────────────────────────────────────

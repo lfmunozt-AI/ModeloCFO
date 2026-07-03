@@ -41,3 +41,19 @@ test("numbers: 'k' pegada a otra letra NO se interpreta como miles ('2kg')", () 
   assert.ok(vals.includes(2), `esperaba 2 en ${JSON.stringify(vals)}`);
   assert.ok(!vals.includes(2000), "no debe convertir 2kg en 2000");
 });
+
+test("numbers (02d): marcadores de lista markdown se ignoran ('1. Ahorro\\n2. Ocio')", () => {
+  const vals = findNumberMentions("1. Ahorro\n2. Ocio").map((m) => m.value);
+  assert.deepEqual(vals, [], `esperaba cero menciones, obtuve ${JSON.stringify(vals)}`);
+});
+
+test("numbers (02d): marcador con ')' también se ignora, pero cifras reales no", () => {
+  const vals = findNumberMentions("1) Deuda de 40000\n2) Meta").map((m) => m.value);
+  assert.ok(vals.includes(40000), "la cifra real 40000 se conserva");
+  assert.ok(!vals.includes(1) && !vals.includes(2), "los ordinales de lista no cuentan");
+});
+
+test("numbers (02d): un '1.200' de miles NO se confunde con marcador de lista", () => {
+  const vals = findNumberMentions("1.200 en total").map((m) => m.value);
+  assert.deepEqual(vals, [1200], `esperaba [1200], obtuve ${JSON.stringify(vals)}`);
+});
