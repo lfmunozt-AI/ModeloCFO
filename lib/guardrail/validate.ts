@@ -92,13 +92,25 @@ function isDerived(
   return false;
 }
 
+/** Coincidencia EXACTA con una cifra del motor (±0.01), no la tolerancia del 1%. */
+function exactMatch(a: number, b: number): boolean {
+  return Math.abs(a - b) <= 0.01;
+}
+
 /**
  * Valida el grounding de todas las cifras de la respuesta del modelo contra los
  * hechos verificados del usuario.
+ *
+ * `cifrasCalculadas` (opcional) son los resultados EXACTOS del motor financiero
+ * (lib/calculator). Una cifra de la respuesta que coincida exactamente (±0.01)
+ * con una calculada se aprueba como "calculo" ANTES de probar los
+ * multiplicadores heurísticos: el cálculo verificado manda sobre la heurística.
+ * El parámetro es opcional para no romper la firma ni los tests existentes.
  */
 export function validateGrounding(
   modelResponse: string,
   facts: VerifiedFact[],
+  cifrasCalculadas: number[] = [],
 ): GroundingResult {
   const aprobadas: ApprovedFigure[] = [];
   const bloqueadas: BlockedFigure[] = [];
@@ -132,6 +144,13 @@ export function validateGrounding(
     // (a) Coincide con un hecho verificado.
     if (factValues.some((f) => approxEqual(m.value, f))) {
       aprobadas.push({ ...base(m, moneda), categoria: "hecho", motivo: "dato del usuario" });
+      continue;
+    }
+    // (c0) Coincide EXACTAMENTE con una cifra del motor financiero. Se prueba
+    // ANTES de las heurísticas: si el código ya calculó esta cifra, es cálculo
+    // verificado, no una coincidencia aproximada.
+    if (cifrasCalculadas.some((c) => exactMatch(m.value, c))) {
+      aprobadas.push({ ...base(m, moneda), categoria: "calculo", motivo: "cálculo verificado por el motor financiero" });
       continue;
     }
     // (c) Se deriva por cálculo de un hecho.

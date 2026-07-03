@@ -8,9 +8,10 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run && node --import tsx --test lib/guardrail/*.test.ts",
+    "test": "vitest run && node --import tsx --test lib/guardrail/*.test.ts lib/calculator/*.test.ts",
     "test:watch": "vitest",
     "test:guardrail": "node --import tsx --test lib/guardrail/*.test.ts",
+    "test:calculator": "node --import tsx --test lib/calculator/*.test.ts",
     "seed": "tsx scripts/seed.ts",
     "export-rlhf": "tsx scripts/export-rlhf.ts"
   },

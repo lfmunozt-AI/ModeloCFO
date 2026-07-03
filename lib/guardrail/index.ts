@@ -130,3 +130,4 @@ export {
   isTimeUnit,
   type Moneda,
 } from "./context";
+export { detectInjection, type InjectionResult } from "./injection";
