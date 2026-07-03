@@ -97,9 +97,57 @@ function exactMatch(a: number, b: number): boolean {
   return Math.abs(a - b) <= 0.01;
 }
 
+// Marcadores condicionales/ilustrativos: cuando preceden a una cifra en su misma
+// frase, la cifra es un ejemplo hipotético, no un monto real. "si" se casa con
+// límite de palabra y SIN normalizar acentos, para no confundir "sí" (afirmación)
+// con "si" (condicional).
+const HYPOTHETICAL_MARKERS = [
+  /\bsi\b/,
+  /\bpor ejemplo\b/,
+  /\bsupongamos\b/,
+  /\bimagina que\b/,
+  /\bpongamos que\b/,
+  /\bdigamos que\b/,
+];
+
+/** Trozo de la MISMA oración que precede a la cifra (corta en . ! ? ; y salto). */
+function sentencePrefixBefore(text: string, start: number): string {
+  const before = text.slice(0, start);
+  const boundary = Math.max(
+    before.lastIndexOf("."),
+    before.lastIndexOf("!"),
+    before.lastIndexOf("?"),
+    before.lastIndexOf(";"),
+    before.lastIndexOf("\n"),
+  );
+  return before.slice(boundary + 1);
+}
+
+/** ¿La cifra va precedida por un marcador hipotético en su misma oración? */
+function hasHypotheticalMarker(text: string, m: NumberMention): boolean {
+  const prefix = sentencePrefixBefore(text, m.start).toLowerCase();
+  return HYPOTHETICAL_MARKERS.some((re) => re.test(prefix));
+}
+
+/**
+ * ¿`v` coincide (±0.01) con alguna operación aritmética entre `a` y `b`?
+ * Cubre suma, resta (valor absoluto), producto y ambos cocientes (con
+ * denominador ≠ 0). Es la unidad del cierre del paquete sobre un par de
+ * operandos.
+ */
+function combines(v: number, a: number, b: number): boolean {
+  if (exactMatch(v, a + b)) return true;
+  if (exactMatch(v, Math.abs(a - b))) return true;
+  if (exactMatch(v, a * b)) return true;
+  if (b !== 0 && exactMatch(v, a / b)) return true;
+  if (a !== 0 && exactMatch(v, b / a)) return true;
+  return false;
+}
+
 /**
  * CIERRE ARITMÉTICO DEL PAQUETE. Con el motor financiero presente, una cifra `v`
- * cuenta como cálculo verificado si coincide (±0.01) con la suma o la resta de:
+ * cuenta como cálculo verificado si coincide (±0.01) con una operación
+ * (suma, resta, producto o cociente) entre:
  *   - dos cifras calculadas, o
  *   - una calculada y un hecho del usuario.
  * La coincidencia directa con una cifra calculada se comprueba aparte
@@ -110,19 +158,17 @@ function matchesPackageClosure(
   cifrasCalculadas: number[],
   facts: VerifiedFact[],
 ): boolean {
-  // Suma/resta de DOS cifras calculadas.
+  // Operaciones entre DOS cifras calculadas.
   for (let i = 0; i < cifrasCalculadas.length; i++) {
     for (let j = i + 1; j < cifrasCalculadas.length; j++) {
-      if (exactMatch(v, cifrasCalculadas[i] + cifrasCalculadas[j])) return true;
-      if (exactMatch(v, Math.abs(cifrasCalculadas[i] - cifrasCalculadas[j]))) return true;
+      if (combines(v, cifrasCalculadas[i], cifrasCalculadas[j])) return true;
     }
   }
-  // Suma/resta de una calculada y un hecho del usuario.
+  // Operaciones entre una calculada y un hecho del usuario.
   const factValues = facts.map((f) => f.valor).filter((x) => Number.isFinite(x));
   for (const c of cifrasCalculadas) {
     for (const f of factValues) {
-      if (exactMatch(v, c + f)) return true;
-      if (exactMatch(v, Math.abs(c - f))) return true;
+      if (combines(v, c, f)) return true;
     }
   }
   return false;
@@ -166,6 +212,10 @@ export function validateGrounding(
   // multiplicadores se desactiva: manda el motor (punto 2 de la calibración).
   const usarMotor = cifrasCalculadas.length > 0;
 
+  // Los hipotéticos ilustrativos solo aplican si el usuario NO aportó hechos que
+  // contradigan: sin datos reales, una cifra con marcador es un ejemplo.
+  const sinHechos = facts.length === 0;
+
   for (const m of figs) {
     const moneda = detectCurrency(modelResponse, m);
 
@@ -207,6 +257,14 @@ export function validateGrounding(
         aprobadas.push({ ...base(m, moneda), categoria: "calculo", motivo: "cálculo sobre un dato del usuario" });
         continue;
       }
+    }
+    // (b') Hipotético ilustrativo: cifra precedida por un marcador condicional
+    // ("si", "por ejemplo", "supongamos"…) en su misma frase y SIN hechos del
+    // usuario que contradigan → es un ejemplo, no un monto real. Se aprueba como
+    // concepto ANTES del bloqueo (decisión de producto aprobada).
+    if (sinHechos && hasHypotheticalMarker(modelResponse, m)) {
+      aprobadas.push({ ...base(m, moneda), categoria: "concepto", motivo: "hipotético ilustrativo" });
+      continue;
     }
     // (d) Monto absoluto sin respaldo → se bloquea.
     bloqueadas.push({

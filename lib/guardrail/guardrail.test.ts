@@ -190,6 +190,47 @@ test("Heurística condicionada: SIN paquete, 450 (=30% de 1500) se APRUEBA (red 
   assert.ok(r.cifras_aprobadas.some((c) => c.valor === 450 && c.categoria === "calculo"));
 });
 
+// ── CALIBRACIÓN 02d (cierre) — producto y cociente ───────────────────────────
+test("Cierre aritmético: cociente y producto exactos se aprueban; no exacto se bloquea", () => {
+  const facts = [
+    { valor: 2500, etiqueta: "ingreso", moneda: null },
+    { valor: 1500, etiqueta: "gasto", moneda: null },
+  ];
+  const calculadas = [1000, 300, 3600];
+  const r = validateGrounding(
+    "El factor es 12, el producto 300000, pero 450 no y el cociente 3.33 tampoco.",
+    facts,
+    calculadas,
+  );
+  const aprob = r.cifras_aprobadas.map((c) => c.valor);
+  const bloq = r.cifras_bloqueadas.map((c) => c.valor);
+  assert.ok(aprob.includes(12), "12 = 3600/300 debe APROBARSE (cociente exacto)");
+  assert.ok(aprob.includes(300000), "300000 = 1000*300 debe APROBARSE (producto exacto)");
+  assert.ok(bloq.includes(450), "450 no cierra con el paquete → BLOQUEADO");
+  // "3.33" se parte en 3 y 33 (el punto es separador de miles): ningún cociente
+  // exacto → ambos BLOQUEADOS. El cociente 1000/300 no se aprueba por redondeo.
+  assert.ok(!aprob.includes(3) && !aprob.includes(33), "3.33 (no exacto) no se aprueba");
+});
+
+// ── CALIBRACIÓN 02d — hipotéticos marcados ────────────────────────────────────
+test("Hipotético marcado: 'si ganas 3000, ahorra 600' sin hechos → ambos concepto", () => {
+  const r = validateGrounding("si ganas 3000, ahorra 600", []);
+  assert.equal(r.cifras_bloqueadas.length, 0, "nada se bloquea: son ilustrativos");
+  const c3000 = r.cifras_aprobadas.find((c) => c.valor === 3000);
+  const c600 = r.cifras_aprobadas.find((c) => c.valor === 600);
+  assert.equal(c3000?.categoria, "concepto");
+  assert.equal(c3000?.motivo, "hipotético ilustrativo");
+  assert.equal(c600?.categoria, "concepto");
+  assert.equal(c600?.motivo, "hipotético ilustrativo");
+});
+
+test("Hipotético marcado: con un hecho real, un monto sin marcador NO se salva", () => {
+  const facts = extractInputFacts("ganas 2500");
+  const r = validateGrounding("Con eso podrías pagar 300 de comisión.", facts);
+  const bloq = r.cifras_bloqueadas.map((c) => c.valor);
+  assert.ok(bloq.includes(300), "300 inventado se evalúa normal y se BLOQUEA");
+});
+
 // ── PIEZA 3 — política + log ──────────────────────────────────────────────────
 test("Pieza 3: sin bloqueos → respuesta intacta, sin log", () => {
   const facts = extractInputFacts("Tengo 40000 en deudas");
